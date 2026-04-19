@@ -108,27 +108,50 @@
 
   <!-- ═══ TEST ═══ -->
   <section id="test-screen" class="hidden">
-    <div class="glass rounded-3xl p-6 md:p-8">
-      <div class="flex items-center justify-between mb-6">
-        <p class="text-sm text-stone-400"><span id="q-current">1</span> / 18 문항</p>
-        <p class="text-sm font-bold text-amber-300"><span id="q-percent">5</span>%</p>
-      </div>
-      <div class="h-2 bg-white/5 rounded-full overflow-hidden mb-8">
-        <div id="progress-bar" class="h-full bg-gradient-to-r from-amber-400 to-rose-400 transition-all duration-500" style="width: 5%;"></div>
-      </div>
-      <div class="min-h-[180px] flex flex-col justify-center">
-        <p class="text-xl md:text-2xl font-bold text-center leading-relaxed mb-8" id="q-text"></p>
-        <div class="px-4">
-          <input type="range" min="1" max="5" value="3" class="q-slider w-full" id="q-slider" />
-          <div class="flex justify-between text-xs text-stone-400 mt-3 px-1">
-            <span>전혀 아니다</span><span>아니다</span><span>보통</span><span>그렇다</span><span>매우 그렇다</span>
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <!-- Question column -->
+      <div class="glass rounded-3xl p-6 md:p-8 lg:col-span-3">
+        <div class="flex items-center justify-between mb-6">
+          <p class="text-sm text-stone-400"><span id="q-current">1</span> / 18 문항</p>
+          <p class="text-sm font-bold text-amber-300"><span id="q-percent">5</span>%</p>
+        </div>
+        <div class="h-2 bg-white/5 rounded-full overflow-hidden mb-8">
+          <div id="progress-bar" class="h-full bg-gradient-to-r from-amber-400 to-rose-400 transition-all duration-500" style="width: 5%;"></div>
+        </div>
+        <div class="min-h-[180px] flex flex-col justify-center">
+          <p class="text-xl md:text-2xl font-bold text-center leading-relaxed mb-8" id="q-text"></p>
+          <div class="px-4">
+            <input type="range" min="1" max="5" value="3" class="q-slider w-full" id="q-slider" />
+            <div class="flex justify-between text-xs text-stone-400 mt-3 px-1">
+              <span>전혀 아니다</span><span>아니다</span><span>보통</span><span>그렇다</span><span>매우 그렇다</span>
+            </div>
+            <p class="text-center mt-4 text-2xl font-black text-amber-300"><span id="q-value">3</span>점</p>
           </div>
-          <p class="text-center mt-4 text-2xl font-black text-amber-300"><span id="q-value">3</span>점</p>
+        </div>
+        <div class="flex justify-between mt-8">
+          <button id="prev-q" class="text-stone-400 hover:text-white text-sm font-semibold disabled:opacity-30">← 이전</button>
+          <button id="next-q" class="cta bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold px-8 py-3 rounded-2xl shadow-lg">다음 →</button>
         </div>
       </div>
-      <div class="flex justify-between mt-8">
-        <button id="prev-q" class="text-stone-400 hover:text-white text-sm font-semibold disabled:opacity-30">← 이전</button>
-        <button id="next-q" class="cta bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold px-8 py-3 rounded-2xl shadow-lg">다음 →</button>
+
+      <!-- Live Radar Chart -->
+      <div class="glass rounded-3xl p-6 lg:col-span-2 flex flex-col items-center">
+        <p class="text-xs font-bold text-amber-300 tracking-widest mb-1">⚡ LIVE 차트</p>
+        <p class="text-stone-400 text-xs mb-3">답변할수록 차오릅니다</p>
+        <svg id="radar" viewBox="0 0 320 320" class="w-full max-w-[280px]">
+          <defs>
+            <linearGradient id="radarGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ffb454" stop-opacity="0.5"/>
+              <stop offset="50%" stop-color="#ff5f8f" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.5"/>
+            </linearGradient>
+          </defs>
+          <g id="radar-grid"></g>
+          <polygon id="radar-poly" points="" fill="url(#radarGrad)" stroke="#ff5f8f" stroke-width="2" style="transition: all .5s cubic-bezier(.2,.9,.3,1);"/>
+          <g id="radar-dots"></g>
+          <g id="radar-labels"></g>
+        </svg>
+        <div id="radar-totals" class="mt-3 grid grid-cols-3 gap-1.5 w-full text-[10px]"></div>
       </div>
     </div>
   </section>
@@ -295,11 +318,83 @@ const renderQuestion = () => {
   $("next-q").textContent = currentQ === QUESTIONS.length - 1 ? "결과 보기 →" : "다음 →";
 };
 
-$("start-test").addEventListener("click", () => { showSection("test-screen"); renderQuestion(); });
-$("q-slider").addEventListener("input", (e) => { answers[currentQ] = parseInt(e.target.value, 10); $("q-value").textContent = e.target.value; });
-$("prev-q").addEventListener("click", () => { if (currentQ > 0) { currentQ--; renderQuestion(); } });
+// ─── Live Radar Chart ───
+const RADAR_AXES = ["R","I","A","S","E","C"]; // hexagon order
+const RADAR_CX = 160, RADAR_CY = 160, RADAR_MAX = 110;
+
+const radarPoint = (idx, valueRatio) => {
+  // 6각형: -90도부터 시계방향 60도씩
+  const angle = (-Math.PI / 2) + (idx * (2 * Math.PI / 6));
+  const r = RADAR_MAX * valueRatio;
+  return [RADAR_CX + r * Math.cos(angle), RADAR_CY + r * Math.sin(angle)];
+};
+
+const initRadar = () => {
+  // grid: 5 rings + axis lines + labels
+  let grid = "";
+  for (let ring = 1; ring <= 5; ring++) {
+    const pts = RADAR_AXES.map((_, i) => radarPoint(i, ring / 5).join(",")).join(" ");
+    grid += `<polygon points="${pts}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`;
+  }
+  for (let i = 0; i < 6; i++) {
+    const [x, y] = radarPoint(i, 1);
+    grid += `<line x1="${RADAR_CX}" y1="${RADAR_CY}" x2="${x}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+  }
+  $("radar-grid").innerHTML = grid;
+
+  // labels
+  const labels = RADAR_AXES.map((k, i) => {
+    const [x, y] = radarPoint(i, 1.2);
+    const t = TYPES[k];
+    return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle"
+              font-size="13" font-weight="800" fill="${t.color}" style="font-family: Pretendard, sans-serif;">
+              ${t.emoji} ${k}
+            </text>`;
+  }).join("");
+  $("radar-labels").innerHTML = labels;
+
+  $("radar-totals").innerHTML = RADAR_AXES.map((k) => {
+    const t = TYPES[k];
+    return `<div class="rounded p-1 bg-white/5 text-center">
+              <span class="font-bold" style="color:${t.color}">${k}</span>
+              <span id="rt-${k}" class="ml-1 text-stone-300 font-mono">0</span>
+            </div>`;
+  }).join("");
+
+  updateRadar();
+};
+
+const liveScores = () => {
+  const sc = { R:0, I:0, A:0, S:0, E:0, C:0 };
+  // 답한 문항만 합산 (3점 기본값은 미응답 분리 위해 currentQ 기준 사용)
+  for (let i = 0; i <= currentQ; i++) {
+    sc[QUESTIONS[i].type] += answers[i];
+  }
+  return sc;
+};
+
+const updateRadar = () => {
+  const sc = liveScores();
+  // 각 유형 최대 15점 (3문항 × 5점)
+  const pts = RADAR_AXES.map((k, i) => radarPoint(i, Math.min(1, sc[k] / 15)).join(",")).join(" ");
+  $("radar-poly").setAttribute("points", pts);
+
+  // dots at vertices
+  const dots = RADAR_AXES.map((k, i) => {
+    const [x, y] = radarPoint(i, Math.min(1, sc[k] / 15));
+    return `<circle cx="${x}" cy="${y}" r="4" fill="${TYPES[k].color}" stroke="#0a0613" stroke-width="2" />`;
+  }).join("");
+  $("radar-dots").innerHTML = dots;
+
+  // numeric totals
+  RADAR_AXES.forEach(k => { const el = document.getElementById("rt-"+k); if (el) el.textContent = sc[k]; });
+};
+
+$("start-test").addEventListener("click", () => { showSection("test-screen"); initRadar(); renderQuestion(); updateRadar(); });
+$("q-slider").addEventListener("input", (e) => { answers[currentQ] = parseInt(e.target.value, 10); $("q-value").textContent = e.target.value; updateRadar(); });
+$("prev-q").addEventListener("click", () => { if (currentQ > 0) { currentQ--; renderQuestion(); updateRadar(); } });
 $("next-q").addEventListener("click", () => {
-  if (currentQ < QUESTIONS.length - 1) { currentQ++; renderQuestion(); }
+  if (currentQ < QUESTIONS.length - 1) { currentQ++; renderQuestion(); updateRadar(); }
   else { computeScores(); showResult(); }
 });
 
