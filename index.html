@@ -472,10 +472,10 @@ const callImage = async (prompt, key) => {
 };
 
 const callText = async (prompt, key) => {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${key}`;
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: "application/json", temperature: 0.7 }
+    generationConfig: { responseMimeType: "application/json" }
   };
   const r = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`Text API ${r.status}`);
